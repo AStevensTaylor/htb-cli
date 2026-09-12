@@ -191,6 +191,8 @@ class Client:
     # -- vm lifecycle --------------------------------------------------------
 
     def spawn(self, machine_id) -> dict:
+        """Start a machine. One route for every tier — free accounts land on a
+        shared lab server, VIP/VIP+ get a private instance."""
         return self.post("/vm/spawn", {"machine_id": int(machine_id)})
 
     def terminate(self, machine_id) -> dict:
@@ -201,10 +203,6 @@ class Client:
 
     def extend(self, machine_id) -> dict:
         return self.post("/vm/extend", {"machine_id": int(machine_id)})
-
-    def play(self, machine_id) -> dict:
-        """Free-tier spawn: joins a shared lab server."""
-        return self.post(f"/machine/play/{int(machine_id)}")
 
     def arena_start(self) -> dict:
         return self.post("/arena/start")

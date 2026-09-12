@@ -62,6 +62,48 @@ def ensure_vpn(args, client_, product="labs"):
     return meta
 
 
+def machine_vpn_server(client_, profile: dict, kind: str) -> int | None:
+    """The lab server a spawned machine sits behind, if HTB tells us."""
+    try:
+        if kind == "release":
+            data = client_.season_machine_active() or {}
+        else:
+            data = client_.machine_active() or {}
+            if data.get("id") != profile.get("id"):
+                return None
+        return int(data.get("vpn_server_id") or 0) or None
+    except (api.ApiError, TypeError, ValueError):
+        return None
+
+
+def ensure_vpn_server(args, client_, server_id, product="labs"):
+    """Move the tunnel onto `server_id` when the machine lives somewhere else.
+
+    Free machines are pinned to one lab server: spawning works from anywhere,
+    but only that server can route to the target.  Does nothing when the
+    tunnel is not ours to move (no VPN, or one we did not bring up).
+    """
+    if not server_id or getattr(args, "no_vpn", False):
+        return None
+    ns = ns_for(args)
+    meta = vpn.read_meta(ns)
+    current = meta.get("id")
+    if current is None or int(current) == int(server_id):
+        return meta or None
+
+    ui.info(f"Target is on VPN server {server_id}; reconnecting from "
+            f"{meta.get('name') or current}")
+    try:
+        client_.vpn_switch(server_id)
+    except api.ApiError as exc:
+        ui.warn(f"Could not switch VPN server: {exc.message}")
+        ui.warn(f"The target will be unreachable until you run "
+                f"`htb vpn switch {server_id}` and reconnect.")
+        return meta
+    vpn.down(ns, quiet=True)
+    return ensure_vpn(args, client_, product=product)
+
+
 def target_env(profile: dict, ip: str, ns: str) -> dict:
     env = {
         "HTB_NETNS": ns,

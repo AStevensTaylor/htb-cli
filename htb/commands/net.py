@@ -277,6 +277,9 @@ def shell(args):
     if profile:
         product = "starting_point" if profile.get("sp_flag") else "labs"
     common.ensure_vpn(args, client, product=product)
+    if profile:
+        common.ensure_vpn_server(args, client, (active or {}).get("vpn_server_id"),
+                                 product=product)
 
     ns = common.ns_for(args)
     if ip and profile and config.get("manage_hosts"):

@@ -207,14 +207,18 @@ root shell.
 ```bash
 python3 tests/smoke.py      # every command against a fake API, no account needed
 python3 tests/proxy.py      # SOCKS5/HTTP proxy protocol tests, loopback only
+python3 tests/vpnswitch.py  # picking the lab server a machine lives on
 ```
 
 ## Notes and limits
 
 * The HTB v4 API is undocumented; endpoints live in one place (`htb/api.py`) so they are
   easy to patch if HTB moves something. `htb raw` reaches anything not wrapped yet.
-* Free accounts get `/machine/play` (shared lab server); VIP/VIP+ get `/vm/spawn`. The CLI
-  picks based on your subscription.
+* `/vm/spawn` starts machines on every tier: free accounts land on a shared lab server,
+  VIP/VIP+ get a private instance. (HTB retired the old free-only `/machine/play` route.)
+* A machine can live behind a lab server that is not the one you are connected to (free
+  machines especially). `htb start`/`htb shell` notice this and reconnect to the right
+  server; `htb vpn switch <id>` does it by hand.
 * Namespaces are a Linux feature — the `shell`/`exec` commands need Linux. Everything else
   (search, submit, info, VPN config download) works anywhere Python does.
 * `htb vpn down` stops the proxy and does not kill shells already inside the namespace; they

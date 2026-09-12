@@ -117,7 +117,7 @@ def info(args):
 
 # --- lifecycle --------------------------------------------------------------
 
-def _spawn(client, profile, kind, sub, assume_yes=False):
+def _spawn(client, profile, kind, assume_yes=False):
     """Ask HTB to start the machine; returns the API message."""
     machine_id = profile["id"]
     active = client.machine_active()
@@ -138,10 +138,8 @@ def _spawn(client, profile, kind, sub, assume_yes=False):
 
     if kind == "release":
         response = client.arena_start()
-    elif sub in ("vip", "vip+"):
-        response = client.spawn(machine_id)
     else:
-        response = client.play(machine_id)
+        response = client.spawn(machine_id)
 
     message = api.message_of(response, "Spawn requested.")
     if any(hint in message.lower() for hint in BUSY_HINTS):
@@ -153,13 +151,17 @@ def start(args):
     client = common.client(args)
     profile = catalog.resolve(client, args.machine, assume_yes=args.yes)
     kind = catalog.machine_kind(client, profile)
-    sub = client.subscription()
 
     if not args.no_vpn:
         common.ensure_vpn(args, client, product=catalog.vpn_product(kind))
 
-    message = _spawn(client, profile, kind, sub, assume_yes=args.yes)
+    message = _spawn(client, profile, kind, assume_yes=args.yes)
     ui.info(message)
+
+    if not args.no_vpn:
+        common.ensure_vpn_server(args, client,
+                                 common.machine_vpn_server(client, profile, kind),
+                                 product=catalog.vpn_product(kind))
 
     ip = common.wait_for_ip(client, profile, kind)
     ns = common.ns_for(args)
