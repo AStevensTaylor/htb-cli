@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "htb-cli"
+version = "1.0.0"
+description = "Hack The Box from the terminal: spawn machines, submit flags, and get a shell that is the only thing on the lab network."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+keywords = ["hackthebox", "htb", "cli", "pentest", "ctf"]
+dependencies = []
+
+[project.scripts]
+htb = "htb.cli:main"
+
+[tool.setuptools]
+packages = ["htb", "htb.commands"]

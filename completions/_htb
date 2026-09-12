@@ -1,0 +1,21 @@
+#compdef htb
+_htb() {
+  local -a commands
+  commands=(login logout whoami status search info start stop reset extend active ip
+            todo submit shell exec vpn proxy challenge season config raw refresh completion)
+  if (( CURRENT == 2 )); then
+    _describe 'command' commands
+    return
+  fi
+  case "${words[2]}" in
+    vpn) _values 'subcommand' up down status servers switch config;;
+    proxy) _values 'subcommand' up down status url;;
+    challenge) _values 'subcommand' list info start stop download;;
+    config) _values 'subcommand' list get set;;
+    start|info|stop|reset|extend|todo|shell)
+      local cache="${XDG_CACHE_HOME:-$HOME/.cache}/htb-cli/machines.json"
+      [[ -f $cache ]] && _values 'machine' ${(f)"$(grep -o '"name": "[^"]*"' $cache | cut -d'\"' -f4)"};;
+  esac
+}
+_htb "$@"
+
