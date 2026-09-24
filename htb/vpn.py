@@ -26,6 +26,10 @@ from pathlib import Path
 from . import api, config, ui
 
 PRODUCTS = ("labs", "starting_point", "competitive", "fortresses")
+# Products whose .ovpn comes from a file the user imported, not the labs API.
+# HTB Academy has no App Token API: its config is downloaded from the website.
+LOCAL_PRODUCTS = ("academy",)
+ACADEMY_VPN_URL = "https://academy.hackthebox.com/vpn"
 
 HOST_IP = "10.200.200.1"
 NS_IP = "10.200.200.2"
@@ -192,6 +196,55 @@ def download_config(client: api.Client, product: str, tcp: bool, dest: Path) -> 
         "location": server.get("location"),
         "product": product,
         "protocol": "tcp" if tcp else "udp",
+    }
+
+
+def local_config_path(product: str) -> Path:
+    return config.CONFIG_DIR / f"{product}.ovpn"
+
+
+def import_config(product: str, src: Path) -> Path:
+    """Store a user-supplied .ovpn (0600) so later connects can reuse it."""
+    try:
+        blob = src.expanduser().read_bytes()
+    except OSError as exc:
+        ui.die(f"Cannot read {src}: {exc.strerror}")
+    if b"remote " not in blob or (b"BEGIN CERTIFICATE" not in blob and b"<ca>" not in blob):
+        ui.die(f"{src} does not look like an OpenVPN config.")
+    config.ensure_dirs()
+    dest = local_config_path(product)
+    dest.write_bytes(blob)
+    dest.chmod(0o600)
+    return dest
+
+
+def local_config(product: str, dest: Path) -> dict:
+    """Copy an imported config into place and describe it like a downloaded one."""
+    src = local_config_path(product)
+    try:
+        text = src.read_text(errors="replace")
+    except OSError:
+        ui.die(f"No {product} VPN config imported yet. Download one from "
+               f"{ACADEMY_VPN_URL}, then run `htb vpn up --academy --ovpn <file>`.")
+    dest.write_text(text)
+    dest.chmod(0o600)
+    remote = proto = None
+    for line in text.splitlines():
+        words = line.split()
+        if not words:
+            continue
+        if words[0] == "remote" and len(words) > 1 and remote is None:
+            remote = words[1]
+            if len(words) > 3:
+                proto = words[3]
+        elif words[0] == "proto" and len(words) > 1:
+            proto = words[1]
+    return {
+        "id": None,
+        "name": remote or f"{product} (imported)",
+        "location": None,
+        "product": product,
+        "protocol": "tcp" if (proto or "").startswith("tcp") else "udp",
     }
 
 
@@ -506,10 +559,12 @@ def _render_scripts(ns: str, internet: bool, mode: str, veth: bool = True) -> di
 
 # --- lifecycle --------------------------------------------------------------
 
-def up(client: api.Client, *, ns: str, product: str = "labs", tcp: bool = False,
+def up(client: api.Client | None, *, ns: str, product: str = "labs", tcp: bool = False,
        internet: bool = True, veth: bool = True, mode: str = "netns",
        timeout: int = 60, reuse: bool = True) -> dict:
-    """Bring the VPN up. Returns metadata about the connection."""
+    """Bring the VPN up. Returns metadata about the connection.
+
+    `client` may be None for LOCAL_PRODUCTS, which never touch the labs API."""
     if shutil.which("openvpn") is None:
         ui.die("openvpn is not installed. Install it (e.g. `sudo pacman -S openvpn`).")
 
@@ -526,7 +581,10 @@ def up(client: api.Client, *, ns: str, product: str = "labs", tcp: bool = False,
     p["log"].write_text("")  # owned by us so we can read openvpn's output
     p["log"].chmod(0o600)
 
-    meta = download_config(client, product, tcp, p["conf"])
+    if product in LOCAL_PRODUCTS:
+        meta = local_config(product, p["conf"])
+    else:
+        meta = download_config(client, product, tcp, p["conf"])
     meta.update({"mode": mode, "ns": ns, "internet": internet,
                  "veth": veth or internet, "dev": dev_name(ns),
                  "started": time.time()})
@@ -546,7 +604,8 @@ def up(client: api.Client, *, ns: str, product: str = "labs", tcp: bool = False,
                 break
             log = _tail(p["log"])
             for marker, msg in (
-                ("AUTH_FAILED", "HTB rejected the VPN credentials. Regenerate the config."),
+                ("AUTH_FAILED", "HTB rejected the VPN credentials. Regenerate the config"
+                                + (f" at {ACADEMY_VPN_URL}." if product in LOCAL_PRODUCTS else ".")),
                 ("Cannot resolve host", "Could not resolve the VPN server's address."),
                 ("Cannot load CA", "The .ovpn file looks corrupt; try again."),
                 ("TLS Error", "TLS handshake with the VPN server failed."),

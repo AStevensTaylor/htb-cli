@@ -17,6 +17,7 @@ GLOBAL_DEFAULTS = {
     "machine": None, "product": None, "no_proxy": False, "no_veth": False,
     "proxy_port": None, "proxy_auth": None, "proxy_localhost": False,
     "listen": None, "port": None, "scheme": "socks5",
+    "academy": False, "ovpn": None, "target": None,
 }
 
 EPILOG = """\
@@ -25,6 +26,8 @@ examples:
   htb search --os linux --state active --difficulty easy
   htb start Lame --shell           spawn + VPN + drop into a connected shell
   htb shell                        shell on the HTB network (nothing else is)
+  htb shell --academy --ovpn academy-regular.ovpn
+                                   same, on the HTB Academy VPN
   htb exec -- nmap -sV $HTB_TARGET
   htb proxy url                    socks5://… for Burp, ZAP, curl on the host
   htb submit                       prompt for a flag for the running machine
@@ -57,6 +60,14 @@ def vpn_flags(parser):
                         help="do not run the in-namespace SOCKS/HTTP proxy")
     parser.add_argument("--no-veth", action="store_true", default=SUPPRESS,
                         help="no host link at all (rules out the proxy and internet)")
+    return parser
+
+
+def academy_flags(parser):
+    parser.add_argument("--academy", action="store_true", default=SUPPRESS,
+                        help="use the HTB Academy VPN instead of the labs")
+    parser.add_argument("--ovpn", metavar="FILE", default=SUPPRESS,
+                        help="import this Academy .ovpn (implies --academy; remembered)")
     return parser
 
 
@@ -166,9 +177,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=flag.submit)
 
     # --- namespace shell ----------------------------------------------------
-    p = proxy_flags(sub.add_parser(
+    p = academy_flags(proxy_flags(sub.add_parser(
         "shell", parents=[netgrp],
-        help="shell whose network is the HTB lab (and only it)"))
+        help="shell whose network is the HTB lab (and only it)")))
+    p.add_argument("--target", metavar="IP", help="set $HTB_TARGET (Academy targets)")
     p.add_argument("machine", nargs="?", help="spawn this machine first")
     p.add_argument("--no-vpn", action="store_true", help="assume the VPN is already up")
     p.add_argument("--no-hosts", action="store_true", help="do not write a hosts entry")
@@ -185,9 +197,9 @@ def build_parser() -> argparse.ArgumentParser:
     vpn_sub = vpn_parser.add_subparsers(dest="vpn_command", metavar="<subcommand>")
     vpn_parser.set_defaults(func=lambda a: vpn_parser.print_help())
 
-    p = proxy_flags(vpn_sub.add_parser("up", parents=[netgrp], help="connect"))
-    p.add_argument("--product", choices=list(vpn_mod.PRODUCTS),
-                   help="labs (default), starting_point, competitive, fortresses")
+    p = academy_flags(proxy_flags(vpn_sub.add_parser("up", parents=[netgrp], help="connect")))
+    p.add_argument("--product", choices=[*vpn_mod.PRODUCTS, *vpn_mod.LOCAL_PRODUCTS],
+                   help="labs (default), starting_point, competitive, fortresses, academy")
     p.add_argument("--force", action="store_true", help="reconnect even if already up")
     p.set_defaults(func=net.vpn_up)
 

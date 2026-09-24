@@ -11,7 +11,7 @@ APP = "htb-cli"
 DEFAULTS = {
     # Name of the network namespace used for the isolated VPN.
     "netns": "htb",
-    # "labs" | "starting_point" | "competitive" | "fortresses"
+    # "labs" | "starting_point" | "competitive" | "fortresses" | "academy"
     "vpn_product": "labs",
     # "udp" | "tcp"
     "vpn_protocol": "udp",

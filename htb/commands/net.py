@@ -25,11 +25,12 @@ alias target='echo $HTB_TARGET'
 # --- vpn --------------------------------------------------------------------
 
 def vpn_up(args):
-    client = common.client(args)
+    product = common.vpn_product(args)
+    client = None if product in vpn.LOCAL_PRODUCTS else common.client(args)
     meta = vpn.up(
         client,
         ns=common.ns_for(args),
-        product=args.product or config.get("vpn_product"),
+        product=product,
         tcp=args.tcp or config.get("vpn_protocol") == "tcp",
         internet=not args.no_internet and config.get("netns_internet"),
         veth=not args.no_veth and config.get("netns_veth"),
@@ -121,9 +122,17 @@ def vpn_status(args):
     ui.emit(payload, render)
 
 
-def vpn_servers(args):
-    client = common.client(args)
+def _api_product(args) -> str:
     product = args.product or config.get("vpn_product")
+    if product in vpn.LOCAL_PRODUCTS:
+        ui.die(f"{product} VPN servers are managed on the website ({vpn.ACADEMY_VPN_URL}); "
+               "download a config there and import it with `htb vpn up --academy --ovpn <file>`.")
+    return product
+
+
+def vpn_servers(args):
+    product = _api_product(args)
+    client = common.client(args)
     servers = vpn.list_servers(client, product)
     rows = [[
         ui.c(s["id"], "grey"),
@@ -136,8 +145,8 @@ def vpn_servers(args):
 
 
 def vpn_switch(args):
+    product = _api_product(args)
     client = common.client(args)
-    product = args.product or config.get("vpn_product")
     servers = vpn.list_servers(client, product)
     if args.server.isdigit():
         target = next((s for s in servers if str(s["id"]) == args.server),
@@ -155,8 +164,8 @@ def vpn_switch(args):
 
 
 def vpn_config(args):
+    product = _api_product(args)
     client = common.client(args)
-    product = args.product or config.get("vpn_product")
     dest = Path(args.output).expanduser() if args.output else Path.cwd() / f"htb-{product}.ovpn"
     meta = vpn.download_config(client, product, args.tcp, dest)
     ui.emit(meta, lambda: ui.success(f"Saved {meta['name']} config to {dest}"))
@@ -257,6 +266,14 @@ def enter_shell(args, profile=None, ip=None) -> int:
 
 
 def shell(args):
+    if common.academy(args):
+        if args.machine:
+            ui.die("Academy targets are spawned on academy.hackthebox.com; "
+                   "drop the machine name.")
+        if not args.no_vpn:
+            common.ensure_vpn(args, None, product=common.vpn_product(args))
+        raise SystemExit(enter_shell(args, None, getattr(args, "target", None)))
+
     client = common.client(args)
     if args.machine:
         from . import machine as machine_cmd
@@ -297,9 +314,11 @@ def exec_cmd(args):
     if not vpn.is_up(ns, "netns"):
         ui.die("VPN namespace is not up. Run `htb vpn up` first.")
     env = {"HTB_NETNS": ns, "TERM": os.environ.get("TERM", "xterm-256color")}
+    # On the Academy VPN the labs' running machine is not reachable, so do
+    # not advertise it as the target.
     try:
-        client = common.client(args)
-        active = client.machine_active()
+        on_labs = vpn.read_meta(ns).get("product") not in vpn.LOCAL_PRODUCTS
+        active = common.client(args).machine_active() if on_labs else None
         if active:
             env.update({"HTB_TARGET": active.get("ip") or "",
                         "HTB_MACHINE": active.get("name") or ""})

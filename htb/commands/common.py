@@ -26,6 +26,23 @@ def vpn_mode(args) -> str:
     return "global" if getattr(args, "global_vpn", False) else "netns"
 
 
+def academy(args) -> bool:
+    """Did the user ask for the HTB Academy VPN (or hand us its .ovpn)?"""
+    return bool(getattr(args, "academy", False) or getattr(args, "ovpn", None))
+
+
+def vpn_product(args) -> str:
+    """Product for `vpn up`/`shell`: --academy, --product, else the config default.
+    A given --ovpn file is imported as the Academy config on the way."""
+    if getattr(args, "ovpn", None):
+        from pathlib import Path
+        dest = vpn.import_config("academy", Path(args.ovpn))
+        ui.info(f"Imported Academy VPN config to {dest}")
+    if academy(args):
+        return "academy"
+    return getattr(args, "product", None) or config.get("vpn_product")
+
+
 def machine_arg(args, client_, required=True, allow_active=True):
     """Resolve the machine named on the command line, else the active one."""
     name = getattr(args, "machine", None)

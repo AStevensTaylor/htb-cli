@@ -120,6 +120,23 @@ knows nothing about `blurry.htb`. It speaks SOCKS5 CONNECT, HTTP CONNECT and abs
 HTTP on the same port; SOCKS BIND and UDP ASSOCIATE are not implemented (nothing in a
 normal web workflow uses them).
 
+**HTB Academy**
+
+Academy targets sit behind their own VPN. Academy has no App Token API, so download the
+`.ovpn` from <https://academy.hackthebox.com/vpn> once and hand it over. It is stored
+0600 as `~/.config/htb-cli/academy.ovpn` and reused after that:
+
+```bash
+htb vpn up --ovpn ~/Downloads/academy-regular.ovpn   # import + connect (implies --academy)
+htb vpn up --academy                                 # later: reuse the imported config
+htb shell --academy --target 10.129.42.17            # namespace shell, $HTB_TARGET set
+```
+
+It uses the same namespace, proxy and cleanup as the labs VPN. Academy and the labs use
+overlapping address ranges, so one namespace holds one of them at a time: `htb start`
+switches back to the labs automatically. To keep both up at once, give Academy its own
+namespace with `--netns academy`. No labs token is needed for any of this.
+
 **Search**
 
 ```bash
@@ -142,7 +159,7 @@ re-pulls it. Search is local and instant, so it also feeds shell completion.
 | `htb stop [machine] [--vpn-down]` | terminate, optionally disconnect |
 | `htb reset` / `htb extend` | reset or extend the running machine |
 | `htb todo <machine>` | toggle the machine on your to-do list |
-| `htb vpn up\|down\|status\|servers\|switch\|config` | VPN control, server list/switch, `.ovpn` download |
+| `htb vpn up\|down\|status\|servers\|switch\|config` | VPN control, server list/switch, `.ovpn` download (`up --academy` for Academy) |
 | `htb proxy up\|down\|status\|url` | the in-namespace SOCKS5/HTTP proxy for host-side tools |
 | `htb challenge list\|info\|start\|stop\|download` | challenges (download password: `hackthebox`) |
 | `htb season` | season tier, rank and this week's release box |
@@ -208,6 +225,7 @@ root shell.
 python3 tests/smoke.py      # every command against a fake API, no account needed
 python3 tests/proxy.py      # SOCKS5/HTTP proxy protocol tests, loopback only
 python3 tests/vpnswitch.py  # picking the lab server a machine lives on
+python3 tests/academy.py    # Academy .ovpn import, kept off the labs API
 ```
 
 ## Notes and limits
